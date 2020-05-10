@@ -60,4 +60,5 @@ pip install -r requirements.txt
 python3 getscore.py
 ```
 
-* 不要作恶, 不要疯狂下载成绩, 给服务器歇口气, 出什么问题自己负责!
+* 勿疯狂下载成绩, 给服务器歇口气, 出什么问题自行负责！
+* 如有侵权，联系立即删除
