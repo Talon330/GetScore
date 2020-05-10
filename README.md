@@ -12,7 +12,7 @@
 | ----------- | :-------------------- |
 | `./cnnlib/` | 封装CNN的相关代码目录 |
 |`./GET_CAPTCHA/`| 存储识别后的验证码图片,文件名包含识别结果 |
-|`./medel/`| 存放模型文件 |
+|`./model/`| 存放模型文件 |
 
 
 ### 1.2文件介绍
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 
 验证码识别使用的是[cnn_captcha](https://github.com/nickliqian/cnn_captcha), 若有需要,利用`downloadValicode.py`下载文件标注(也可直接用`GET_CAPTCHA/`文件夹内的图片训练, 标注信息自行检查正确与否),按其说明重新训练即可.
 
-* 提供训练好的模型文件, 存储于`./medel/`,可酌情使用.
+* 提供训练好的模型文件, 存储于`./model/`,可酌情使用.
 
 ### 2.3 查询数据准备
 按格式把待查询信息填入`复试名单.csv`即可.
