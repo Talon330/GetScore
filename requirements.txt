@@ -1,0 +1,7 @@
+requests==2.23.0
+tensorflow_gpu==1.7.0
+pandas==1.0.3
+numpy==1.18.1
+beautifulsoup4==4.9.0
+olefile==0.46
+Pillow==7.1.2
