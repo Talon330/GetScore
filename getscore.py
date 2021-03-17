@@ -8,7 +8,7 @@ from PIL import Image
 import numpy as np
 from cnnlib.recognition_object import Recognizer
 
-nlpath = "复试名单.csv" #仅需要填入姓名和考生编号即可
+nlpath = "复试名单.csv"
 filedpath = "查询失败的信息.csv"
 
 col1 = "姓名"
@@ -40,19 +40,23 @@ headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36',
 }
 r = s.get(url=get_url, headers=headers)
+R = Recognizer(image_height, image_width, max_captcha, char_set, model_save_dir)
 
 
 def captcha_recognition(times):
     global vcd, vcd1, vcd2
     captcha_url = 'https://yz.scu.edu.cn/User/Valicdoe'
     r = s.get(captcha_url)
+    # with open('./yanzhengma.jpg', 'wb') as fp:
+    #     fp.write(r.content)
+    # image = Image.open("./yanzhengma.jpg")#('./yanzhengma.jpg')
     image = Image.open(io.BytesIO(r.content))
     w = image.size[0]
     de_img = split.depoint(image, split.denoiethresh)
     bi_img = split.binar(de_img, split.binarythresh)
     fi_img = split.fillup(bi_img)
     v = split.cfs(fi_img)
-    print(v)
+    print('分割位置：', v)
     try:    
         v=np.array(v)
         cuts=np.zeros((4,4))
@@ -78,14 +82,14 @@ def captcha_recognition(times):
         else:
             return 0
     else:
+        #cuts = [(4,0,16,22),(16,0,27,22),(27,0,38,22),(38,0,53,22)] #'./User/0J0N.jpg'的较好分割位置
         vcd1 = []
-        R = Recognizer(image_height, image_width, max_captcha, char_set, model_save_dir)
         if cuts[0,0]>0 and cuts[3,3]<w-1: #若没有超出图片边界
             for i,n in enumerate(cuts):
                 temp = fi_img.crop(n) # 调用crop函数进行切割
                 temp = temp.resize((image_width, image_height))
                 
-                temp.save("temporary.jpg") #不转存识别效果就很差，原因暂不明
+                temp.save("temporary.jpg") #不转存识别效果就很差，原因不明，可能由于Recognizer对象里需要灰度化，本图像已经完成二值化
                 temp = Image.open("temporary.jpg")
                 
                 start = time.time()
@@ -115,7 +119,7 @@ def captcha_recognition(times):
 def cleandata(i, txt): #
     """数据清洗，只保留成绩，i用来标定行数，txt传入网页数据"""
     global namelist
-    soup = BeautifulSoup(r.text, 'html.parser')
+    soup = BeautifulSoup(txt, 'html.parser')
     for idx, tr in enumerate(soup.find_all('tr')):
         spans = tr.find_all('span')
         namelist.loc[i,score["col{}".format(idx+4)]]=spans[0].contents[0]
@@ -146,5 +150,5 @@ for i in range(rownum):
     print("查询完一人，休息几秒\n")
     time.sleep(random.random()*5) 
 if os.path.exists("temporary.jpg"):
-    os.remove("temporary.jpg") 
+    os.remove("temporary.jpg")   
 

@@ -5,7 +5,7 @@ import random
 import time
 
 if not os.path.exists("./image/"):
-    os.makedirs("./inage/")
+    os.makedirs("./image/")
 IMAGE_URL = "https://yz.scu.edu.cn/User/Valicdoe"
 
 getnum = 200 #验证码周期次数

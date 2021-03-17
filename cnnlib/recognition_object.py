@@ -10,51 +10,58 @@ for i in range(10):
 import tensorflow as tf
 import numpy as np
 from PIL import Image
+from tensorflow.python.ops.gen_array_ops import expand_dims
 from cnnlib.network import CNN
-import json
+import json, os
 
 
 class Recognizer(CNN):
     def __init__(self, image_height, image_width, max_captcha, char_set, model_save_dir):
         # 初始化变量
-        super(Recognizer, self).__init__(image_height, image_width, max_captcha, char_set, model_save_dir)
+        super(Recognizer, self).__init__(max_captcha, char_set, 1.)
 
-        # 新建图和会话
-        self.g = tf.Graph()
-        self.sess = tf.Session(graph=self.g)
-        # 使用指定的图和会话
-        with self.g.as_default():
-            # 迭代循环前，写出所有用到的张量的计算表达式，如果写在循环中，会发生内存泄漏，拖慢识别的速度
-            # tf初始化占位符
-            self.X = tf.placeholder(tf.float32, [None, self.image_height * self.image_width])  # 特征向量
-            self.Y = tf.placeholder(tf.float32, [None, self.max_captcha * self.char_set_len])  # 标签
-            self.keep_prob = tf.placeholder(tf.float32)  # dropout值
-            # 加载网络和模型参数
-            self.y_predict = self.model()
-            self.predict = tf.argmax(tf.reshape(self.y_predict, [-1, self.max_captcha, self.char_set_len]), 2)
-            saver = tf.train.Saver()
-            with self.sess.as_default() as sess:
-                saver.restore(sess, self.model_save_dir)
+        model_save_dir = os.path.join(model_save_dir,'tf_model_weights.ckpt')
 
-    # def __del__(self):
-    #     self.sess.close()
-    #     print("session close")
+        self.build(input_shape=(None, 1, image_height, image_width))
+        self.summary((1, image_height, image_width))
+        self.load_weights(model_save_dir)
 
     def rec_image(self, img):
         # 读取图片
         img_array = np.array(img)
         test_image = self.convert2gray(img_array)
-        test_image = test_image.flatten() / 255
-        # 使用指定的图和会话
-        with self.g.as_default():
-            with self.sess.as_default() as sess:
-                text_list = sess.run(self.predict, feed_dict={self.X: [test_image], self.keep_prob: 1.})
+        test_image = test_image / 255
+        for _ in range(4-len(test_image.shape)):
+            test_image = np.expand_dims(test_image, 0)
+        y_predict = self.predict(test_image)
+        text_list = tf.argmax(tf.reshape(y_predict, [-1, self.max_captcha, self.char_set_len]), 2)
 
         # 获取结果
-        predict_text = text_list[0].tolist()
+        predict_text = text_list[0]
         p_text = ""
         for p in predict_text:
             p_text += str(self.char_set[p])
 
         # 返回识别结果
         return p_text
+
+
+def main():
+    with open("conf/sample_config.json", "r", encoding="utf-8") as f:
+        sample_conf = json.load(f)
+    image_height = sample_conf["image_height"]
+    image_width = sample_conf["image_width"]
+    max_captcha = sample_conf["max_captcha"]
+    char_set = sample_conf["char_set"]
+    model_save_dir = sample_conf["model_save_dir"]
+    tf.keras.backend.clear_session()
+    gpus= tf.config.list_physical_devices('GPU') 
+    tf.config.experimental.set_memory_growth(gpus[0], True)
+    R = Recognizer(image_height, image_width, max_captcha, char_set, model_save_dir)
+    r_img = Image.open("./sample/test/_15889195303727891.jpg")
+    t = R.rec_image(r_img)
+    print(t)
+
+
+if __name__ == '__main__':
+    main()

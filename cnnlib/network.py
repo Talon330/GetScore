@@ -3,25 +3,20 @@ import numpy as np
 import os
 from PIL import Image
 import random
+from tensorflow.keras import layers, models
+from tensorflow.python.ops.nn_ops import dropout
 
-
-class CNN(object):
-    def __init__(self, image_height, image_width, max_captcha, char_set, model_save_dir):
+class CNN(models.Model):
+    def __init__(self, max_captcha, char_set, droprate):
+        super(CNN, self).__init__()
         # 初始值
-        self.image_height = image_height
-        self.image_width = image_width
         self.max_captcha = max_captcha
         self.char_set = char_set
         self.char_set_len = len(char_set)
-        self.model_save_dir = model_save_dir  # 模型路径
         with tf.name_scope('parameters'):
             self.w_alpha = 0.01
             self.b_alpha = 0.1
-        # tf初始化占位符
-        with tf.name_scope('data'):
-            self.X = tf.placeholder(tf.float32, [None, self.image_height * self.image_width])  # 特征向量
-            self.Y = tf.placeholder(tf.float32, [None, self.max_captcha * self.char_set_len])  # 标签
-            self.keep_prob = tf.placeholder(tf.float32)  # dropout值
+            self.keep_prob = droprate  # dropout值
 
     @staticmethod
     def convert2gray(img):
@@ -30,10 +25,12 @@ class CNN(object):
         :param img:
         :return:
         """
-        if len(img.shape) > 2:
+        if len(img.shape) == 3 and img.shape[0] == 3:
             r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
             gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
-            return gray
+            return np.expand_dims(gray, 0)
+        elif len(img.shape) == 2:
+            return np.expand_dims(img, 0)
         else:
             return img
 
@@ -53,51 +50,53 @@ class CNN(object):
             idx = i * self.char_set_len + self.char_set.index(ch)
             vector[idx] = 1
         return vector
-
-    def model(self):
-        x = tf.reshape(self.X, shape=[-1, self.image_height, self.image_width, 1])
-        print(">>> input x: {}".format(x))
-
+    
+    def build(self, input_shape):
         # 卷积层1
-        wc1 = tf.get_variable(name='wc1', shape=[3, 3, 1, 32], dtype=tf.float32,
-                              initializer=tf.contrib.layers.xavier_initializer())
-        bc1 = tf.Variable(self.b_alpha * tf.random_normal([32]))
-        conv1 = tf.nn.relu(tf.nn.bias_add(tf.nn.conv2d(x, wc1, strides=[1, 1, 1, 1], padding='SAME'), bc1))
-        conv1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-        conv1 = tf.nn.dropout(conv1, self.keep_prob)
+        self.conv1 = layers.Conv2D(filters=32, kernel_size=3, padding="same", use_bias=True, activation='relu', kernel_initializer='glorot_normal',bias_initializer='random_normal')
+        self.pool1 = layers.MaxPooling2D(pool_size=(2,2), strides=(1, 1), padding='same')
+        self.drop1 = layers.Dropout(self.keep_prob)
 
         # 卷积层2
-        wc2 = tf.get_variable(name='wc2', shape=[3, 3, 32, 64], dtype=tf.float32,
-                              initializer=tf.contrib.layers.xavier_initializer())
-        bc2 = tf.Variable(self.b_alpha * tf.random_normal([64]))
-        conv2 = tf.nn.relu(tf.nn.bias_add(tf.nn.conv2d(conv1, wc2, strides=[1, 1, 1, 1], padding='SAME'), bc2))
-        conv2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-        conv2 = tf.nn.dropout(conv2, self.keep_prob)
+        self.conv2 = layers.Conv2D(filters=64, kernel_size=3, padding="same", use_bias=True, activation='relu', kernel_initializer='glorot_normal',bias_initializer='random_normal')
+        self.pool2 = layers.MaxPooling2D(pool_size=(2,2), strides=(1, 1), padding='same')
+        self.drop2 = layers.Dropout(self.keep_prob)
 
         # 卷积层3
-        wc3 = tf.get_variable(name='wc3', shape=[3, 3, 64, 128], dtype=tf.float32,
-                              initializer=tf.contrib.layers.xavier_initializer())
-        bc3 = tf.Variable(self.b_alpha * tf.random_normal([128]))
-        conv3 = tf.nn.relu(tf.nn.bias_add(tf.nn.conv2d(conv2, wc3, strides=[1, 1, 1, 1], padding='SAME'), bc3))
-        conv3 = tf.nn.max_pool(conv3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-        conv3 = tf.nn.dropout(conv3, self.keep_prob)
-        print(">>> convolution 3: ", conv3.shape)
-        next_shape = conv3.shape[1] * conv3.shape[2] * conv3.shape[3]
+        self.conv3 = layers.Conv2D(filters=128, kernel_size=3, padding="same", use_bias=True, activation='relu', kernel_initializer='glorot_normal',bias_initializer='random_normal')
+        self.pool3 = layers.MaxPooling2D(pool_size=(2,2), strides=(1, 1), padding='same')
+        self.drop3 = layers.Dropout(self.keep_prob)
+
+        self.flatten = layers.Flatten()
 
         # 全连接层1
-        wd1 = tf.get_variable(name='wd1', shape=[next_shape, 1024], dtype=tf.float32,
-                              initializer=tf.contrib.layers.xavier_initializer())
-        bd1 = tf.Variable(self.b_alpha * tf.random_normal([1024]))
-        dense = tf.reshape(conv3, [-1, wd1.get_shape().as_list()[0]])
-        dense = tf.nn.relu(tf.add(tf.matmul(dense, wd1), bd1))
-        dense = tf.nn.dropout(dense, self.keep_prob)
+        self.dense1 = layers.Dense(1024,activation='relu', kernel_initializer='glorot_normal',bias_initializer='random_normal')
+        self.drop4 = layers.Dropout(self.keep_prob)
 
         # 全连接层2
-        wout = tf.get_variable('name', shape=[1024, self.max_captcha * self.char_set_len], dtype=tf.float32,
-                               initializer=tf.contrib.layers.xavier_initializer())
-        bout = tf.Variable(self.b_alpha * tf.random_normal([self.max_captcha * self.char_set_len]))
+        self.dense2 = layers.Dense(self.max_captcha * self.char_set_len, kernel_initializer='glorot_normal',bias_initializer='random_normal')
+        self.drop5 = layers.Dropout(self.keep_prob)
+        super(CNN, self).build(input_shape)
 
-        with tf.name_scope('y_prediction'):
-            y_predict = tf.add(tf.matmul(dense, wout), bout)
+    def call(self, x):
+        x = self.conv1(x)
+        x = self.pool1(x)
+        x = self.drop1(x)
+        x = self.conv2(x)
+        x = self.pool2(x)
+        x = self.drop2(x)
+        x = self.conv3(x)
+        x = self.pool3(x)
+        x = self.drop3(x)
+        x = self.flatten(x)
+        x = self.dense1(x)
+        x = self.drop4(x)
+        x = self.dense2(x)
+        x = self.drop5(x)
+        return x
 
-        return y_predict
+    def summary(self, shape):
+        x_input = layers.Input(shape=shape)
+        output = self.call(x_input)
+        model = tf.keras.Model(inputs = x_input, outputs = output)
+        model.summary()
