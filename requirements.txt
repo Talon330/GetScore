@@ -4,4 +4,4 @@ olefile==0.46
 pandas==1.2.3
 Pillow==8.1.1
 requests==2.23.0
-tensorflow-gpu==2.4.1
+tensorflow-gpu==2.6.4
